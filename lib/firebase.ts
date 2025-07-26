@@ -1,4 +1,4 @@
-// Firebase Services for Blog Operations
+     
 import {
   collection,
   doc,
@@ -23,33 +23,13 @@ import {
   getDownloadURL,
   deleteObject
 } from 'firebase/storage';
-import { db, storage } from '@/config/firebase';
+// import { db, storage } from '@/config/firebase';
+import { BlogBlock } from './ai-blog-generator';
+import { db } from '@/config/firebase';
+// import { BlogBlock } from './ai-blog-generator';
 
 // Types
-export interface Post {
-  id: string;
-  title: string;
-  content: string;
-  excerpt?: string;
-  slug: string;
-  status: 'draft' | 'published';
-  featuredImage?: string;
-  readingTime: {
-    text: string;
-    minutes: number;
-  };
-  metaDescription?: string;
-  authorId: string;
-  categoryId: string;
-  tagIds: string[];
-  viewCount: number;
-  likeCount: number;
-  shareCount: number;
-  isAIGenerated: boolean;
-  publishedAt?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}
+
 
 export interface Category {
   id: string;
@@ -117,9 +97,45 @@ export interface Analytics {
     count: number;
   }>;
 }
-
-// Posts Service
+export interface Post {
+  id: string;
+  title: string;
+  content: string;
+  excerpt?: string;
+  slug: string;
+  blocks?: BlogBlock[];
+  status: 'draft' | 'published';
+  featuredImage?: string;
+  readingTime: {
+    text: string;
+    minutes: number;
+  };
+  metaDescription?: string;
+  authorId: string;
+  categoryId: string;
+  tags: string[];
+  viewCount: number;
+  likeCount: number;
+  isAIGenerated: boolean;
+  publishedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
 export class PostsService {
+  static async createPost(postData: any): Promise<string> {
+    console.log("postData", postData);
+
+    const cleanPostData = removeUndefinedFields(postData);
+
+    const docRef = await addDoc(collection(db, 'posts'), {
+      ...cleanPostData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    return docRef.id;
+  }
+  
   static async getPosts(
     filters: {
       status?: 'draft' | 'published';
@@ -130,31 +146,35 @@ export class PostsService {
     } = {}
   ) {
     const constraints: QueryConstraint[] = [];
-    
+
     if (filters.status) {
       constraints.push(where('status', '==', filters.status));
     }
+
     if (filters.categoryId) {
       constraints.push(where('categoryId', '==', filters.categoryId));
     }
+
     if (filters.authorId) {
       constraints.push(where('authorId', '==', filters.authorId));
     }
-    
+
     constraints.push(orderBy('createdAt', 'desc'));
     constraints.push(limit(filters.limit || 10));
-    
+
     if (filters.lastDoc) {
       constraints.push(startAfter(filters.lastDoc));
     }
 
     const q = query(collection(db, 'posts'), ...constraints);
     const snapshot = await getDocs(q);
-    
+
     return {
-      posts: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post)),
+      posts: snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as Post)
+      ),
       lastDoc: snapshot.docs[snapshot.docs.length - 1],
-      hasMore: snapshot.docs.length === (filters.limit || 10)
+      hasMore: snapshot.docs.length === (filters.limit || 10),
     };
   }
 
@@ -173,14 +193,7 @@ export class PostsService {
     return { id: docSnap.id, ...docSnap.data() } as Post;
   }
 
-  static async createPost(postData: Omit<Post, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
-    const docRef = await addDoc(collection(db, 'posts'), {
-      ...postData,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-    return docRef.id;
-  }
+  
 
   static async updatePost(id: string, updates: Partial<Post>): Promise<void> {
     await updateDoc(doc(db, 'posts', id), {
@@ -267,7 +280,6 @@ export class TagsService {
   }
 }
 
-// Users Service
 // export class UsersService {
 //   static async getUsers(limitCount = 20): Promise<BlogUser[]> {
 //     const q = query(
@@ -297,70 +309,29 @@ export class TagsService {
 // }
 
 // Storage Service
-export class StorageService {
-  static async uploadImage(file: File, path: string): Promise<string> {
-    const storageRef = ref(storage, path);
-    const snapshot = await uploadBytes(storageRef, file);
-    return await getDownloadURL(snapshot.ref);
-  }
+// export class StorageService {
+//   static async uploadImage(file: File, path: string): Promise<string> {
+//     const storageRef = ref(storage, path);
+//     const snapshot = await uploadBytes(storageRef, file);
+//     return await getDownloadURL(snapshot.ref);
+//   }
 
-  static async deleteImage(url: string): Promise<void> {
-    const imageRef = ref(storage, url);
-    await deleteObject(imageRef);
-  }
+//   static async deleteImage(url: string): Promise<void> {
+//     const imageRef = ref(storage, url);
+//     await deleteObject(imageRef);
+//   }
 
-  static async uploadUserAvatar(userId: string, file: File): Promise<string> {
-    // const path = `users/${userId}/avatar/${Date.now()}-${file.name}`;
-    const path = `users/${userId}/avatar/${Date.now()}-${file.name}`;
-    console.log("path",path)
-    return await this.uploadImage(file, path);
-  }
+//   static async uploadUserAvatar(userId: string, file: File): Promise<string> {
+//     // const path = `users/${userId}/avatar/${Date.now()}-${file.name}`;
+//     const path = `users/${userId}/avatar/${Date.now()}-${file.name}`;
+//     console.log("path",path)
+//     return await this.uploadImage(file, path);
+//   }
 
-  static async uploadPostImage(postId: string, file: File): Promise<string> {
-    const path = `posts/${postId}/images/${Date.now()}-${file.name}`;
-    return await this.uploadImage(file, path);
-  }
-}
+//   static async uploadPostImage(postId: string, file: File): Promise<string> {
+//     const path = `posts/${postId}/images/${Date.now()}-${file.name}`;
+//     return await this.uploadImage(file, path);
+//   }
+// }
 
 // Analytics Service
-export class AnalyticsService {
-  static async getAnalytics(): Promise<Analytics> {
-    // This would typically aggregate data from multiple collections
-    // For now, returning mock structure - implement based on your needs
-    const analytics: Analytics = {
-      totalPosts: 0,
-      totalDrafts: 0,
-      totalPublished: 0,
-      totalUsers: 0,
-      totalViews: 0,
-      totalLikes: 0,
-      monthlyStats: [],
-      topPosts: [],
-      categoryDistribution: [],
-      tagDistribution: []
-    };
-
-    // Get total posts
-    const postsSnapshot = await getDocs(collection(db, 'posts'));
-    analytics.totalPosts = postsSnapshot.size;
-
-    // Get published/draft counts
-    const publishedQuery = query(collection(db, 'posts'), where('status', '==', 'published'));
-    const publishedSnapshot = await getDocs(publishedQuery);
-    analytics.totalPublished = publishedSnapshot.size;
-    analytics.totalDrafts = analytics.totalPosts - analytics.totalPublished;
-
-    // Get total users
-    const usersSnapshot = await getDocs(collection(db, 'users'));
-    analytics.totalUsers = usersSnapshot.size;
-
-    // Calculate total views and likes
-    postsSnapshot.docs.forEach(doc => {
-      const data = doc.data();
-      analytics.totalViews += data.viewCount || 0;
-      analytics.totalLikes += data.likeCount || 0;
-    });
-
-    return analytics;
-  }
-}

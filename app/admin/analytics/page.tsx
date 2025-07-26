@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Calendar, TrendingUp, Users, Eye, Heart, FileText, Brain, Download } from 'lucide-react';
-
+import { useEffect } from 'react';
+import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,47 +25,68 @@ import {
   Pie,
   Cell,
   AreaChart,
-  Area
+  Area,
+  Legend 
 } from 'recharts';
+import { fetchAnalytics } from '@/redux/slices/analyticSlice';
+import { fetchCategories } from '@/redux/slices/categoriesSlice';
+import { generateStats } from '@/utils/generateStats';;
 
-// Mock data
-const monthlyData = [
-  { month: 'Jan', posts: 12, views: 4500, likes: 240, users: 120 },
-  { month: 'Feb', posts: 19, views: 5200, likes: 380, users: 145 },
-  { month: 'Mar', posts: 15, views: 4800, likes: 290, users: 132 },
-  { month: 'Apr', posts: 22, views: 6100, likes: 450, users: 178 },
-  { month: 'May', posts: 28, views: 7200, likes: 520, users: 195 },
-  { month: 'Jun', posts: 25, views: 6800, likes: 480, users: 210 },
-];
 
-const categoryData = [
-  { name: 'Technology', value: 35, color: '#8884d8' },
-  { name: 'AI/ML', value: 25, color: '#82ca9d' },
-  { name: 'Web Dev', value: 20, color: '#ffc658' },
-  { name: 'Design', value: 15, color: '#ff7300' },
-  { name: 'Other', value: 5, color: '#00ff7f' },
-];
-
-const dailyData = [
-  { day: 'Mon', views: 1200, likes: 89 },
-  { day: 'Tue', views: 1400, likes: 102 },
-  { day: 'Wed', views: 1100, likes: 78 },
-  { day: 'Thu', views: 1600, likes: 124 },
-  { day: 'Fri', views: 1800, likes: 145 },
-  { day: 'Sat', views: 2200, likes: 178 },
-  { day: 'Sun', views: 1900, likes: 156 },
-];
-
-const topPosts = [
-  { title: 'Getting Started with AI', views: 3421, likes: 234, category: 'AI/ML' },
-  { title: 'Modern CSS Techniques', views: 2456, likes: 156, category: 'Web Dev' },
-  { title: 'React Best Practices', views: 2234, likes: 189, category: 'Technology' },
-  { title: 'Design Systems Guide', views: 1987, likes: 145, category: 'Design' },
-  { title: 'TypeScript Tips', views: 1654, likes: 123, category: 'Web Dev' },
-];
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState('6months');
+  const dispatch = useAppDispatch();
+  const { data: analytics, loading, error } = useAppSelector(state => state.analytics);
+  const { items: categories } = useAppSelector(state => state.categories);
+  const { posts } = useAppSelector(state => state.posts);
+
+// Fetch categories once
+useEffect(() => {
+  dispatch(fetchCategories());
+}, [dispatch]);
+  useEffect(() => {
+    dispatch(fetchAnalytics());
+  }, [dispatch]);
+console.log("analytics",analytics)
+console.log("categories",categories)
+const categoryMap = useMemo(() => {
+  const map: Record<string, string> = {};
+  categories.forEach(cat => {
+    map[cat.id] = cat.name;
+  });
+  return map;
+}, [categories]);
+console.log("categoryMap",categoryMap)
+// Ensure default fallback
+const monthlyData = analytics?.monthlyStats?.map((item, index) => ({
+  month: item.month || `Month ${index + 1}`, // fallback if month is missing
+  views: item.views || 0,
+  likes: item.likes || 0,
+  posts: item.posts || 0,
+})) || [];
+
+const dailyData =analytics?.dailyActivity?.map(item => ({
+  day: item.day || 'N/A',
+  views: item.views || 0,
+  likes: item.likes || 0,
+  posts: item.posts || 0,
+})) || [];
+// Color palette for categories (add more if needed)
+const categoryColors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00ff7f', '#00bcd4', '#ff69b4'];
+
+const categoryData = (analytics?.categoryDistribution || []).map((item, index) => ({
+  name: item.name,
+  value: item.count, // map `count` to `value`
+  color: categoryColors[index % categoryColors.length],
+}));
+
+console.log("monthlyData",monthlyData)
+console.log("dailyData",dailyData)
+
+  if (loading) return <div className="p-4">Loading analytics...</div>;
+  if (error) return <div className="p-4 text-red-600">Error: {error}</div>;
+  if (!analytics) return <div className="p-4">No analytics available.</div>;
 
   const handleExport = () => {
     try {
@@ -87,41 +109,8 @@ export default function AnalyticsPage() {
     }
   };
 
-  const stats = [
-    {
-      title: 'Total Views',
-      value: '45.2K',
-      change: '+18%',
-      changeType: 'positive' as const,
-      icon: Eye,
-      description: 'Last 30 days'
-    },
-    {
-      title: 'Total Likes',
-      value: '2.4K',
-      change: '+8%',
-      changeType: 'positive' as const,
-      icon: Heart,
-      description: 'All time likes'
-    },
-    {
-      title: 'Total Posts',
-      value: '124',
-      change: '+12%',
-      changeType: 'positive' as const,
-      icon: FileText,
-      description: '8 published this month'
-    },
-    {
-      title: 'Active Users',
-      value: '1.2K',
-      change: '+15%',
-      changeType: 'positive' as const,
-      icon: Users,
-      description: 'Monthly active users'
-    }
-  ];
-
+  const stats = generateStats(analytics);
+  // const weeklyData = groupPostsByWeek(posts);
   return (
   
       <div className="flex h-screen bg-gradient-to-br from-background via-background/50 to-muted/30 overflow-hidden">
@@ -205,6 +194,8 @@ export default function AnalyticsPage() {
                       />
                       <Area type="monotone" dataKey="views" stackId="1" stroke="#8884d8" fill="#8884d8" fillOpacity={0.6} />
                       <Area type="monotone" dataKey="likes" stackId="1" stroke="#82ca9d" fill="#82ca9d" fillOpacity={0.6} />
+                      <Area type="monotone" dataKey="posts" stackId="1" stroke="#ffc658" fill="#ffc658" fillOpacity={0.6} />
+                      
                     </AreaChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -231,12 +222,26 @@ export default function AnalyticsPage() {
                       />
                       <Bar dataKey="views" fill="#8884d8" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="likes" fill="#82ca9d" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="posts" fill="#ffc658" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
             </div>
-
+            {/* <div className="w-full h-[300px] bg-white dark:bg-gray-900 p-4 rounded-2xl shadow">
+      <h3 className="text-lg font-semibold mb-4">Weekly Draft vs Published</h3>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={weeklyData}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="weekStart" />
+          <YAxis allowDecimals={false} />
+          <Tooltip />
+          <Legend />
+          <Bar dataKey="Draft" fill="#f97316" />
+          <Bar dataKey="Published" fill="#10b981" />
+        </BarChart>
+      </ResponsiveContainer> */}
+    {/* </div> */}
             <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
               {/* Category Distribution */}
               <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
@@ -262,7 +267,7 @@ export default function AnalyticsPage() {
                       </Pie>
                       <Tooltip 
                         contentStyle={{ 
-                          backgroundColor: 'hsl(var(--card))', 
+                          // backgroundColor: 'hsl(var(--card))', 
                           border: '1px solid hsl(var(--border))',
                           borderRadius: '8px'
                         }} 
@@ -294,23 +299,25 @@ export default function AnalyticsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {topPosts.map((post, index) => (
+                    {analytics.topPosts.map((post, index) => (
                       <div key={index} className="flex items-center justify-between p-3 sm:p-4 rounded-lg border border-border/50 hover:bg-accent/50 transition-colors">
                         <div className="space-y-1 flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-lg font-bold text-muted-foreground">#{index + 1}</span>
-                            <h3 className="font-medium text-sm sm:text-base leading-tight">{post.title}</h3>
+                            <h3 className="font-medium text-sm sm:text-base leading-tight">       {post.title.length > 40 ? post.title.slice(0, 20) + '...' : post.title}</h3>
                           </div>
                           <div className="flex items-center gap-4 text-xs sm:text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Eye className="h-3 w-3" />
-                              {post.views.toLocaleString()}
+                              {post.
+viewCount}
                             </span>
                             <span className="flex items-center gap-1">
                               <Heart className="h-3 w-3" />
-                              {post.likes}
+                              {post.likeCount
+}
                             </span>
-                            <Badge variant="outline" className="text-xs">{post.category}</Badge>
+                            <Badge variant="outline" className="text-xs">{categoryMap[post?.categoryId]}</Badge>
                           </div>
                         </div>
                       </div>

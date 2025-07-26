@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, Plus, Edit, Trash2, Eye, Brain, Calendar, Tag } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
-// import { fetchPosts, deletePost, setSearchTerm, setFilter } from '@/redux/slices/postSlice';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,65 +13,65 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import toast from 'react-hot-toast';
+import { fetchPosts,resetCurrentPost, resetPosts ,setSearchTerm,setStatusFilter } from '@/redux/slices/postsSlice';
+import { fetchCategories } from '@/redux/slices/categoriesSlice';
+
 
 
 export default function PostsPage() {
   const dispatch = useAppDispatch();
-  // const { posts, isLoading, error, searchTerm, filter } = useAppSelector((state) => state.posts);
+  const { posts, isLoading, error, hasMore, lastDoc, searchTerm, statusFilter } = useAppSelector(state => state.posts);
+  const { items: categories } = useAppSelector(state => state.categories);
+
+// Fetch categories once
+useEffect(() => {
+  dispatch(fetchCategories());
+}, [dispatch]);
+
+// 🧠 Create a map from category ID to category name
+const categoryMap = useMemo(() => {
+  const map: Record<string, string> = {};
+  categories.forEach(cat => {
+    map[cat.id] = cat.name;
+  });
+  return map;
+}, [categories]);
+console.log("categoryMap",categoryMap)
   const router = useRouter(); 
-  const isLoading = false;
-  const error = null;
-  const searchTerm = '';
-  const filter = 'all'; // could be 'published', 'draft', etc.
-  const posts = [
-    {
-      id: '1',
-      title: 'Understanding React Server Components',
-      author: 'Jane Doe',
-      date: '2025-07-19',
-      status: 'published',
-      views: 1023,
-      likes: 234,
-      tags: ['react', 'server', 'components'],
-      aiGenerated: false,
-    },
-    {
-      id: '2',
-      title: 'Next.js App Router Guide',
-      author: 'John Smith',
-      date: '2025-07-15',
-      status: 'draft',
-      views: 321,
-      likes: 45,
-      tags: ['nextjs', 'routing'],
-      aiGenerated: false,
-    },
-    {
-      id: '3',
-      title: 'Deploying on Vercel with CI/CD',
-      author: 'Alice Lee',
-      date: '2025-07-10',
-      status: 'published',
-      views: 876,
-      likes: 112,
-      tags: ['vercel', 'deployment', 'ci/cd'],
-      aiGenerated: true,
-    },
-  ];
-  
+  console.log("posts",posts)
+  useEffect(() => {
+    dispatch(resetPosts());
+    dispatch(fetchPosts({ status: statusFilter, search: searchTerm }));
+  }, [dispatch, searchTerm, statusFilter]);
+
   const filteredPosts = posts.filter(post => {
-    const status = post.published ? 'published' : 'draft';
-    const matchesSearch = post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         post.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    if (filter === 'all') return matchesSearch;
-    if (filter === 'published') return matchesSearch && status === 'published';
-    if (filter === 'draft') return matchesSearch && status === 'draft';
-    if (filter === 'ai') return matchesSearch && post.aiGenerated;
+    const matchesSearch =
+      post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      post.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
     
     return matchesSearch;
   });
+  
+  
+  // Load more for pagination
+  const loadMore = () => {
+    if (hasMore && !isLoading) {
+      dispatch(fetchPosts({ status: statusFilter, search: searchTerm, limit: 10, lastDoc }));
+    }
+  };
 
+  const handleDeletePost = (id: string, title: string) => {
+    if (confirm(`Delete "${title}"?`)) {
+      dispatch(deletePost(id));
+    }
+  };
+
+  const handleEditPost = (id: string) => {
+    router.push(`/admin/posts/${id}/edit`);
+  };
+  // const handleEditPost = (id: string) => {
+  //   router.push(`/admin/posts/view/${id}`);
+  // };
   return (
     <div className="flex h-screen bg-gradient-to-br from-background via-background/50 to-muted/30 overflow-hidden">
         <Sidebar />
@@ -112,9 +111,9 @@ export default function PostsPage() {
                     {['all', 'published', 'draft', 'ai'].map((filterType) => (
                       <Button
                         key={filterType}
-                        variant={filter === filterType ? 'default' : 'outline'}
+                        variant={statusFilter === filterType ? 'default' : 'outline'}
                         size="sm"
-                        onClick={() => dispatch(setFilter(filterType))}
+                        onClick={() => dispatch(setStatusFilter(filterType))}
                         className="capitalize whitespace-nowrap text-xs sm:text-sm"
                       >
                         {filterType === 'ai' ? 'AI Generated' : filterType}
@@ -170,7 +169,7 @@ export default function PostsPage() {
                             <div className="space-y-1 flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <h3 className="font-medium text-sm leading-tight">{post.title}</h3>
-                                {post.aiGenerated && (
+                                {post?.aiGenerated && (
                                   <Badge variant="outline" className="text-purple-500 border-purple-500 text-xs">
                                     <Brain className="h-3 w-3 mr-1" />
                                     AI
@@ -203,12 +202,19 @@ export default function PostsPage() {
                               <Badge variant={post.published ? 'default' : 'secondary'} className="text-xs">
                                 {post.published ? 'published' : 'draft'}
                               </Badge>
-                              <Badge variant="outline" className="text-xs">{post.category}</Badge>
+                              {categoryMap[post.categoryId] && (
+  <Badge variant="outline" className="text-xs">
+    {categoryMap[post.categoryId]}
+  </Badge>
+)}
+
+                              <Badge variant="outline" className="text-xs">{categoryMap[post.categoryId] || "Unknown"}</Badge>
                             </div>
                             <div className="flex items-center gap-3 text-muted-foreground">
                               <span className="flex items-center gap-1">
-                                <Eye className="h-3 w-3" />
-                                {post.views.toLocaleString()}
+                              view:
+                                {post.viewCount
+}
                               </span>
                               {post.publishedAt && (
                                 <span>{new Date(post.publishedAt).toLocaleDateString()}</span>
@@ -284,17 +290,24 @@ export default function PostsPage() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline">{post.category}</Badge>
+                          {categoryMap[post.categoryId] && (
+  <Badge variant="outline" className="text-xs">
+    {categoryMap[post.categoryId]}
+  </Badge>
+)}
                           </TableCell>
                           <TableCell>
+                            {console.log("post",post)}
                             <div className="space-y-1 text-sm">
                               <div className="flex items-center gap-1">
-                                <Eye className="h-3 w-3" />
-                                {post.views.toLocaleString()}
+                                view:
+                                {post.viewCount
+}
                               </div>
                               <div className="flex items-center gap-1">
-                                <Eye className="h-3 w-3" />
-                                {post.likes.toLocaleString()}
+                               Like:
+                                {post.likeCount
+}
                               </div>
                             </div>
                           </TableCell>
@@ -346,6 +359,13 @@ export default function PostsPage() {
                     </TableBody>
                   </Table>
                 </div>
+                {hasMore && (
+  <div className="text-center mt-6">
+    <Button onClick={loadMore} disabled={isLoading} variant="outline">
+      {isLoading ? 'Loading...' : 'Load More'}
+    </Button>
+  </div>
+)}
 
                 {filteredPosts.length === 0 && (
                   <div className="text-center py-12">

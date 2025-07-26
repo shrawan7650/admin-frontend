@@ -45,7 +45,7 @@ const blockTypes = [
   { type: 'ConclusionBlock', label: 'Conclusion', icon: FileText },
 ];
 
-export function BlockEditor({ blocks, onChange }: BlockEditorProps) {
+export function BlockEditor({  blocks = [], onChange }: BlockEditorProps) {
   const [selectedBlockType, setSelectedBlockType] = useState<string>('');
 
   const addBlock = (type: string) => {
@@ -53,10 +53,11 @@ export function BlockEditor({ blocks, onChange }: BlockEditorProps) {
       id: `block-${Date.now()}`,
       type: type as any,
       content: getDefaultContent(type),
-      order: blocks.length
+      order: blocks?.length
     };
 
-    onChange([...blocks, newBlock]);
+    onChange([...(blocks || []), newBlock]);
+
     setSelectedBlockType('');
   };
 
@@ -168,10 +169,11 @@ export function BlockEditor({ blocks, onChange }: BlockEditorProps) {
 
       {/* Blocks List */}
       <DragDropContext onDragEnd={onDragEnd}>
-        <Droppable droppableId="blocks" isDropDisabled={false}>
+        <Droppable droppableId="blocks"  isDropDisabled={false}
+  isCombineEnabled={false}>
           {(provided) => (
             <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-4">
-              {blocks.map((block, index) => (
+              {Array.isArray(blocks) && blocks.map((block, index) => (
                 <Draggable key={block.id} draggableId={block.id} index={index}>
                   {(provided, snapshot) => (
                     <div
@@ -195,7 +197,7 @@ export function BlockEditor({ blocks, onChange }: BlockEditorProps) {
         </Droppable>
       </DragDropContext>
 
-      {blocks.length === 0 && (
+      {Array.isArray(blocks) && blocks.length === 0 && (
         <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
           <CardContent className="p-8 text-center">
             <div className="space-y-4">

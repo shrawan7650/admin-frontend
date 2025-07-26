@@ -8,87 +8,22 @@ import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DashboardCharts } from '@/components/charts/DashboardCharts';
+import { fetchAnalytics } from '@/redux/slices/analyticSlice';
 
-
+import { formatDistanceToNow } from 'date-fns';
+import { generateStats } from '@/utils/generateStats';
 export default function AdminDashboard() {
   const dispatch = useAppDispatch();
-  // const { dashboardStats, isLoading, error } = useAppSelector((state) => state.analytics);
+  const { data: analytics, loading, error } = useAppSelector(state => state.analytics);
  const isLoading = false;
- const error = null;
 
-  // useEffect(() => {
-  //   dispatch(fetchDashboardStats());
-  // }, [dispatch]);
+ useEffect(() => {
+  dispatch(fetchAnalytics());
+}, [dispatch]);
+console.log("analytics",analytics)
 
-  // const stats = dashboardStats ? [
-  //   {
-  //     title: 'Total Posts',
-  //     value: dashboardStats.totalPosts.toString(),
-  //     change: dashboardStats.postsChange,
-  //     changeType: 'positive' as const,
-  //     icon: FileText,
-  //     description: 'Published posts'
-  //   },
-  //   {
-  //     title: 'Page Views',
-  //     value: dashboardStats.totalViews.toLocaleString(),
-  //     change: dashboardStats.viewsChange,
-  //     changeType: 'positive' as const,
-  //     icon: Eye,
-  //     description: 'Last 30 days'
-  //   },
-  //   {
-  //     title: 'Total Likes',
-  //     value: dashboardStats.totalLikes.toLocaleString(),
-  //     change: dashboardStats.likesChange,
-  //     changeType: 'positive' as const,
-  //     icon: Heart,
-  //     description: 'All time likes'
-  //   },
-  //   {
-  //     title: 'Active Users',
-  //     value: dashboardStats.activeUsers.toString(),
-  //     change: dashboardStats.usersChange,
-  //     changeType: 'positive' as const,
-  //     icon: Users,
-  //     description: 'Monthly active'
-  //   }
-  // ] : [];
-  const stats = [
-    {
-      title: 'Total Posts',
-      value: '128',
-      change: '+12%',
-      changeType: 'positive' as const,
-      icon: FileText,
-      description: 'Published posts'
-    },
-    {
-      title: 'Page Views',
-      value: '45,678',
-      change: '+8.5%',
-      changeType: 'positive' as const,
-      icon: Eye,
-      description: 'Last 30 days'
-    },
-    {
-      title: 'Total Likes',
-      value: '3,215',
-      change: '+5%',
-      changeType: 'positive' as const,
-      icon: Heart,
-      description: 'All time likes'
-    },
-    {
-      title: 'Active Users',
-      value: '932',
-      change: '+3.2%',
-      changeType: 'positive' as const,
-      icon: Users,
-      description: 'Monthly active'
-    }
-  ];
-  
+
+  const stats = generateStats(analytics);
 
   if (isLoading) {
     return (
@@ -216,36 +151,50 @@ export default function AdminDashboard() {
             {/* Recent Activity */}
             <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2 order-2 lg:order-1">
-                <DashboardCharts />
+                <DashboardCharts analytics={analytics}/>
               </div>
 
               <div className="space-y-4 sm:space-y-6 order-1 lg:order-2">
                 {/* Recent Posts */}
-                <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-                  <CardHeader>
-                    <CardTitle className="text-base sm:text-lg">Recent Posts</CardTitle>
-                    <CardDescription className="text-sm">Your latest published content</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3 sm:space-y-4">
-                    {[
-                      { title: 'Getting Started with AI', views: '1.2K', date: '2 days ago' },
-                      { title: 'Modern Web Development', views: '890', date: '4 days ago' },
-                      { title: 'Design Systems Guide', views: '2.1K', date: '1 week ago' },
-                      { title: 'TypeScript Best Practices', views: '1.5K', date: '1 week ago' }
-                    ].map((post, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 sm:p-3 rounded-lg border border-border/50 hover:bg-accent/50 transition-colors">
-                        <div className="space-y-1">
-                          <p className="text-xs sm:text-sm font-medium leading-none truncate">{post.title}</p>
-                          <p className="text-xs text-muted-foreground">{post.views} views • {post.date}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
+                <CardContent className="space-y-3 sm:space-y-4">
+  {analytics?.recentPosts?.length ? (
+    analytics.recentPosts.map((post, index) => {
+      const viewsFormatted =
+        post.viewCount >= 1000
+          ? (post.viewCount / 1000).toFixed(1).replace(/\.0$/, '') + 'K'
+          : post.viewCount.toString();
 
+      let publishedAgo = 'Draft';
+      if (post.createdAt?.seconds) {
+        const createdAtDate = new Date(post.createdAt.seconds * 1000);
+        if (!isNaN(createdAtDate.getTime())) {
+          publishedAgo = formatDistanceToNow(createdAtDate, { addSuffix: true });
+        }
+      }
+
+      return (
+        <div
+          key={post.id || index}
+          className="flex items-center justify-between p-2 sm:p-3 rounded-lg border border-border/50 hover:bg-accent/50 transition-colors"
+        >
+          <div className="space-y-1">
+            <p className="text-xs sm:text-sm font-medium leading-none truncate" title={post.title}>
+              {post.title.length > 40 ? post.title.slice(0, 20) + '...' : post.title}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {viewsFormatted} views • {publishedAgo}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+          </div>
+        </div>
+      );
+    })
+  ) : (
+    <p className="text-sm text-muted-foreground">No recent posts available.</p>
+  )}
+</CardContent>
                 {/* System Status */}
                 <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
                   <CardHeader>

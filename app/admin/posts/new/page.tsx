@@ -7,36 +7,45 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { BlogEditor } from '@/components/blog/BlogEditor';
 import { BlogBlock } from '@/lib/ai-blog-generator';
 import toast from 'react-hot-toast';
+import { useAppDispatch } from '@/redux/hooks';
+import { createPost } from '@/redux/slices/postsSlice';
 
-export default function NewPostPage() {
+export default  function NewPostPage() {
   const router = useRouter();
-
-  const handleSave = (post: any) => {
-    // Mock save functionality
-    console.log('Saving post:', post);
-    
-    // Convert blocks to content if using block editor
-    if (post.blocks && post.blocks.length > 0) {
-      const content = post.blocks.map((block: BlogBlock) => {
-        switch (block.type) {
-          case 'HeadingBlock':
-            return `<h${block.content.level}>${block.content.text}</h${block.content.level}>`;
-          case 'ParagraphBlock':
-            return `<p>${block.content.text}</p>`;
-          case 'ListBlock':
-            const listItems = block.content.items.map(item => `<li>${item}</li>`).join('');
-            return block.content.ordered ? `<ol>${listItems}</ol>` : `<ul>${listItems}</ul>`;
-          default:
-            return '';
-        }
-      }).join('\n');
-      
-      post.content = content;
+  const dispatch = useAppDispatch();
+  const handleSave = async (post: any) => {
+    try {
+      let finalPost = { ...post };
+  
+      // Convert blocks to HTML content only if blocks exist
+      if (post.blocks && post.blocks.length > 0) {
+        const content = post.blocks.map((block: BlogBlock) => {
+          switch (block.type) {
+            case 'HeadingBlock':
+              return `<h${block.content.level}>${block.content.text}</h${block.content.level}>`;
+            case 'ParagraphBlock':
+              return `<p>${block.content.text}</p>`;
+            case 'ListBlock':
+              const items = block.content.items.map((item: string) => `<li>${item}</li>`).join('');
+              return block.content.ordered ? `<ol>${items}</ol>` : `<ul>${items}</ul>`;
+            default:
+              return '';
+          }
+        }).join('\n');
+  
+        finalPost = { ...finalPost, content };
+      }
+    console.log("finalPost",finalPost)
+      // Save the post
+      const newPostId = await dispatch(createPost(finalPost)).unwrap();
+      toast.success('Post created successfully!');
+      // router.push('/admin/posts');
+    } catch (err) {
+      console.error('Failed to save post:', err);
+      toast.error('Failed to save post.');
     }
-    
-    toast.success('Post saved successfully!');
-    router.push('/admin/posts');
   };
+  
 
   return (
 

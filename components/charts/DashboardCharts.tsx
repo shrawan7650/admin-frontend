@@ -16,7 +16,7 @@ import {
   Cell
 } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-
+import { format, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 const monthlyData = [
   { month: 'Jan', posts: 12, views: 4500, likes: 240 },
   { month: 'Feb', posts: 19, views: 5200, likes: 380 },
@@ -26,24 +26,65 @@ const monthlyData = [
   { month: 'Jun', posts: 25, views: 6800, likes: 480 },
 ];
 
-const categoryData = [
-  { name: 'Technology', value: 35, color: '#8884d8' },
-  { name: 'AI/ML', value: 25, color: '#82ca9d' },
-  { name: 'Web Dev', value: 20, color: '#ffc658' },
-  { name: 'Design', value: 15, color: '#ff7300' },
-  { name: 'Other', value: 5, color: '#00ff7f' },
-];
 
-const aiVsManualData = [
-  { month: 'Jan', ai: 8, manual: 4 },
-  { month: 'Feb', ai: 12, manual: 7 },
-  { month: 'Mar', ai: 10, manual: 5 },
-  { month: 'Apr', ai: 15, manual: 7 },
-  { month: 'May', ai: 18, manual: 10 },
-  { month: 'Jun', ai: 16, manual: 9 },
-];
+function getCurrentWeekRange() {
+  const today = new Date();
+  const start = startOfWeek(today, { weekStartsOn: 1 }); // Monday
+  const end = endOfWeek(today, { weekStartsOn: 1 });     // Sunday
+  return { start, end };
+}
+function getWeekDays() {
+  const { start, end } = getCurrentWeekRange();
+  return eachDayOfInterval({ start, end }).map((date) => ({
+    date,
+    label: format(date, "EEE"), // e.g. "Mon", "Tue"
+  }));
+}
 
-export function DashboardCharts() {
+export function DashboardCharts({analytics}: { analytics: any }) {
+
+  const categoryColors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00ff7f', '#00bcd4', '#ff69b4'];
+
+const categoryData = (analytics?.categoryDistribution || []).map((item, index) => ({
+  name: item.name,
+  value: item.count, // map `count` to `value`
+  color: categoryColors[index % categoryColors.length],
+}));
+  // Fix here
+
+  const weekDays = getWeekDays();
+  const dailyActivity = analytics?.dailyActivity || [];
+
+  // Normalize day names from backend to match getWeekDays format
+  const normalizedDailyActivity = dailyActivity.map((item) => ({
+    ...item,
+    day: item.day.slice(0, 3), // Make sure it's like "Mon", "Tue" etc
+  }));
+
+  const aiVsManualData = weekDays.map(({ label, date }) => {
+    const backendEntry = normalizedDailyActivity.find((item) => item.day === label);
+    return {
+      day: label,
+      date: format(date, "dd MMM"),
+      ai: backendEntry?.ai || 0,
+      manual: backendEntry?.manual || 0,
+    };
+  });
+
+  const aiCount = aiVsManualData.reduce((sum, d) => sum + d.ai, 0);
+  const manualCount = aiVsManualData.reduce((sum, d) => sum + d.manual, 0);
+  const avgAi = (aiCount / aiVsManualData.length).toFixed(1);
+  const avgManual = (manualCount / aiVsManualData.length).toFixed(1);
+
+  const { start, end } = getCurrentWeekRange();
+  const formattedRange = `${format(start, "dd MMM")} – ${format(end, "dd MMM")}`;
+  
+const monthlyData = analytics?.monthlyStats?.map((item, index) => ({
+  month: item.month || `Month ${index + 1}`, // fallback if month is missing
+  views: item.views || 0,
+  likes: item.likes || 0,
+  posts: item.posts || 0,
+})) || [];
   return (
     <div className="grid gap-4 sm:gap-6">
       {/* Monthly Posts Trend */}
@@ -76,29 +117,48 @@ export function DashboardCharts() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* AI vs Manual Posts */}
         <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="text-base sm:text-lg">AI vs Manual Posts</CardTitle>
-            <CardDescription className="text-sm">Comparison of AI-generated and manually written content</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={aiVsManualData}>
-                <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
-                <XAxis dataKey="month" className="text-muted-foreground" />
-                <YAxis className="text-muted-foreground" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'hsl(var(--card))', 
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px'
-                  }} 
-                />
-                <Bar dataKey="ai" fill="#8884d8" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="manual" fill="#82ca9d" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+  <CardHeader>
+    <CardTitle className="text-base sm:text-lg">AI vs Manual Posts</CardTitle>
+    <CardDescription className="text-sm">
+      Weekly summary: <span className="font-medium">{formattedRange}</span>
+    </CardDescription>
+  </CardHeader>
+  <CardContent>
+    <div className="mb-4 grid grid-cols-2 gap-4 text-sm text-muted-foreground">
+      <div className="flex flex-col items-center">
+        <span className="text-foreground text-lg font-semibold">{aiCount}</span>
+        <span>Total AI Posts</span>
+        <span className="text-xs">(Avg: {avgAi}/day)</span>
+      </div>
+      <div className="flex flex-col items-center">
+        <span className="text-foreground text-lg font-semibold">{manualCount}</span>
+        <span>Total Manual Posts</span>
+        <span className="text-xs">(Avg: {avgManual}/day)</span>
+      </div>
+    </div>
+
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={aiVsManualData}>
+        <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
+        <XAxis dataKey="day" className="text-muted-foreground" />
+        <YAxis className="text-muted-foreground" />
+        <Tooltip
+          labelFormatter={(label: string, payload: any) => {
+            const date = aiVsManualData.find(d => d.day === label)?.date;
+            return `${label} (${date})`;
+          }}
+          contentStyle={{
+            backgroundColor: 'hsl(var(--card))',
+            border: '1px solid hsl(var(--border))',
+            borderRadius: '8px',
+          }}
+        />
+        <Bar dataKey="ai" fill="#8884d8" radius={[4, 4, 0, 0]} name="AI Posts" />
+        <Bar dataKey="manual" fill="#82ca9d" radius={[4, 4, 0, 0]} name="Manual Posts" />
+      </BarChart>
+    </ResponsiveContainer>
+  </CardContent>
+</Card>
 
         {/* Category Distribution */}
         <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
@@ -124,7 +184,7 @@ export function DashboardCharts() {
                 </Pie>
                 <Tooltip 
                   contentStyle={{ 
-                    backgroundColor: 'hsl(var(--card))', 
+                    // backgroundColor: 'hsl(var(--card))', 
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '8px'
                   }} 

@@ -20,6 +20,7 @@ export interface User {
   createdAt: string | null;
   updatedAt: string | null;
   lastLogin: string | null;
+  lastActive: string | null;
 }
 
 export interface AuthState {

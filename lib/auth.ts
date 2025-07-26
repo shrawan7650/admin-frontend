@@ -59,6 +59,7 @@ export class AuthService {
       // Update lastLogin timestamp
       await updateDoc(doc(db, 'users', uid), {
         lastLogin: serverTimestamp(),
+        lastActive: serverTimestamp(), // ✅ Add this line
       });
 
       // Fetch user profile
@@ -247,6 +248,11 @@ console.log("Doc data:", docSnap.data());
     return onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
         try {
+          // ✅ update lastActive here
+          await updateDoc(doc(db, 'users', firebaseUser.uid), {
+            lastActive: serverTimestamp(),
+          });
+  
           const user = await this.getUserProfile(firebaseUser.uid);
           callback(user);
         } catch (error) {
@@ -258,6 +264,7 @@ console.log("Doc data:", docSnap.data());
       }
     });
   }
+  
   
   static onIdTokenChange(callback: (user: User | null) => void): () => void {
     // Wrap onIdTokenChanged, but also resolve user profile data for consistency:
